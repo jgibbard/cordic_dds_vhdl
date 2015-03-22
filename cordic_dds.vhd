@@ -16,14 +16,36 @@ library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.numeric_std.all;
 entity cordic_dds is port (
 	clock 	: in std_logic;
 	SW			: in std_logic_vector(9 downto 0);
-	LEDG		: OUT std_logic_vector(9 downto 0)
+	LEDG		: out std_logic_vector(9 downto 0)
 );
 end cordic_dds;
 
 
 architecture behavioral of cordic_dds is
 
+signal clk		: std_logic;
+signal rst		: std_logic;
+signal angle	: std_logic_vector(31 downto 0);
+signal gain		: std_logic_vector(15 downto 0);
+signal sine		: std_logic_vector(15 downto 0);
+signal cosine	: std_logic_vector(15 downto 0);
+
 begin
+
+uut : entity work.cordic_sin_cos 
+generic map (
+	output_size_g	=> 16
+)
+
+port map (
+	clk			=> clk,
+	rst			=> rst,
+	angle_in		=> angle,
+	gain_in		=> gain,
+	sine_out		=> sine,
+	cosine_out	=> cosine 
+);
+
 
 
 

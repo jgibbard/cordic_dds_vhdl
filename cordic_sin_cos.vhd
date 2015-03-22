@@ -17,15 +17,14 @@ entity cordic_sin_cos is
 
 generic (
 	input_size_g	: integer := 32;  --Must be 32
-	output_size_g	: integer := 32;
-	LUT_width		: integer := 32;
-	LUT_depth		: integer := 31
+	output_size_g	: integer := 16
 );
 
  port (
 	clk			: in std_logic;
 	rst			: in std_logic;
 	angle_in		: in std_logic_vector(input_size_g - 1 downto 0);
+	gain_in		: in std_logic_vector(output_size_g - 1 downto 0);
 	sine_out		: out std_logic_vector(output_size_g - 1 downto 0);
 	cosine_out	: out std_logic_vector(output_size_g - 1 downto 0)
 );
@@ -34,8 +33,14 @@ end cordic_sin_cos;
 
 architecture behavioral of cordic_sin_cos is
 
+---------------------------------------------------------------------------
 --Define Cordic look up table (LUT)
-type LUT_t is array (0 to LUT_depth - 1) of signed(LUT_width - 1 downto 0);
+---------------------------------------------------------------------------
+constant LUT_depth_c	: integer := 31;
+constant LUT_width_c	: integer := 32;
+--Total LUT size = 31*32 = 992bits = 124 bytes;
+
+type LUT_t is array (0 to LUT_depth_c - 1) of signed(LUT_width_c - 1 downto 0);
 constant cordic_lut_c : LUT_t := (
 	X"20000000",X"12E4051E",X"09FB385B",X"051111D4",X"028B0D43",X"0145D7E1",
 	X"00A2F61E",X"00517C55",X"0028BE53",X"00145F2F",X"000A2F98",X"000517CC",
@@ -44,22 +49,34 @@ constant cordic_lut_c : LUT_t := (
 	X"00000029",X"00000014",X"0000000A",X"00000005",X"00000003",X"00000001",
 	X"00000000"
 );
+---------------------------------------------------------------------------
+--End of cordic look up table (LUT)
+---------------------------------------------------------------------------
 
-constant gain_c : signed(output_size_g - 1 downto 0) := X"006E8C0A";
+signal quadrant	: std_logic_vector(1 downto 0);
+signal gain			: std_logic_vector(output_size_g downto 0);
 
-signal quadrant : std_logic_vector(1 downto 0);
-
+--Stores x and y values for each pipeline stage of the cordic algorithm 
+--X and Y must be one bit wider than the output size due to added carry bits
 type pipeline_array_t is array (0 to output_size_g - 1) of signed(output_size_g downto 0);
+
+--Stores z values for each pipeline stage of the cordic algorithm.
+--Z must be as wide as the input angle
+type pipeline_array_z_t is array (0 to output_size_g - 1) of signed(input_size_g - 1 downto 0);
 
 signal X : pipeline_array_t;
 signal Y : pipeline_array_t;
-signal Z : pipeline_array_t;
-
+signal Z : pipeline_array_z_t;
 
 begin
 
-quadrant <= angle_in(input_size_g-1 downto input_size_g - 2);
+--Top two bits of angle_in signal indicate its quadrant 
+quadrant <= angle_in(input_size_g - 1 downto input_size_g - 2);
 
+--Expand gain_in by one bit while preserving the sign bit
+gain <= ('1' & gain_in) when gain_in(output_size_g - 1) = '1' else ('0' & gain_in);
+
+--Rotates the input by +/- 90 degrees so that -90 >= Z(0) <= 90
 angle_input : process(clk,rst)
 begin
 
@@ -70,19 +87,19 @@ begin
 		case quadrant is
 		
 			when "00" =>
-				X(0) <= gain_c;
+				X(0) <= signed(gain);
 				Y(0) <= (others => '0');
 				Z(0) <= signed(angle_in);
 			when "01" =>
 				X(0) <= (others => '0');
-				Y(0) <= gain_c;
+				Y(0) <= signed(gain);
 				Z(0) <= signed(("00" & angle_in(input_size_g-3 downto 0))); 
 			when "10" =>
 				X(0) <= (others => '0');
-				Y(0) <= -(gain_c);
+				Y(0) <= -(signed(gain));
 				Z(0) <= signed(("11" & angle_in(input_size_g-3 downto 0)));
 			when "11" =>
-				X(0) <= gain_c;
+				X(0) <= signed(gain);
 				Y(0) <= (others => '0');
 				Z(0) <= signed(angle_in);
 				
