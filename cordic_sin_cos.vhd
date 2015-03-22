@@ -36,9 +36,13 @@ architecture behavioral of cordic_sin_cos is
 ---------------------------------------------------------------------------
 --Define Cordic look up table (LUT)
 ---------------------------------------------------------------------------
+--Total LUT size = 31*32 = 992bits = 124 bytes;
 constant LUT_depth_c	: integer := 31;
 constant LUT_width_c	: integer := 32;
---Total LUT size = 31*32 = 992bits = 124 bytes;
+
+--LUT Calculation is:
+--Result of [ATAN(2^-i) * (2^32/360)] rounded and converted to HEX
+--With in the range of 0 to LUT_depth_c - 1
 
 type LUT_t is array (0 to LUT_depth_c - 1) of signed(LUT_width_c - 1 downto 0);
 constant cordic_lut_c : LUT_t := (
@@ -57,15 +61,18 @@ signal quadrant	: std_logic_vector(1 downto 0);
 signal gain			: std_logic_vector(output_size_g downto 0);
 
 --Stores x and y values for each pipeline stage of the cordic algorithm 
---X and Y must be one bit wider than the output size due to added carry bits
-type pipeline_array_t is array (0 to output_size_g - 1) of signed(output_size_g downto 0);
-
---Stores z values for each pipeline stage of the cordic algorithm.
---Z must be as wide as the input angle
-type pipeline_array_z_t is array (0 to output_size_g - 1) of signed(input_size_g - 1 downto 0);
+--X and Y must be one bit wider than the output size due to adder carry bits
+type pipeline_array_t is array (0 to output_size_g - 1) 
+							of signed(output_size_g downto 0);
 
 signal X : pipeline_array_t;
 signal Y : pipeline_array_t;
+
+--Stores z values for each pipeline stage of the cordic algorithm.
+--Z must be as wide as the input angle
+type pipeline_array_z_t is array (0 to output_size_g - 1) 
+							of signed(input_size_g - 1 downto 0);
+
 signal Z : pipeline_array_z_t;
 
 begin
@@ -74,13 +81,19 @@ begin
 quadrant <= angle_in(input_size_g - 1 downto input_size_g - 2);
 
 --Expand gain_in by one bit while preserving the sign bit
-gain <= ('1' & gain_in) when gain_in(output_size_g - 1) = '1' else ('0' & gain_in);
+gain <= ('1' & gain_in) when gain_in(output_size_g - 1) = '1' 
+	else ('0' & gain_in);
 
---Rotates the input by +/- 90 degrees so that -90 >= Z(0) <= 90
+--This cordic implemntation only works between -90 and +90
+--This process rotates the input by +/- 90 degrees so that -90 >= Z(0) <= +90
 angle_input : process(clk,rst)
 begin
 
 	if (rst = '1') then
+		
+		X(0) <= (others => '0');
+		Y(0) <= (others => '0');
+		Z(0) <= (others => '0');
 		
 	elsif rising_edge(clk) then
 	
