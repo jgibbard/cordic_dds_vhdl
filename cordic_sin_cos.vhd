@@ -10,6 +10,17 @@
 -- Change Log
 -- Version 0.0.1 : Initial version
 ---------------------------------------------------------------------------
+-- Usage :	Input is 32 bits. i.e. 0 to (2^32 - 1) where:
+--				0 = 0 deg and (2^32 - 1) = 659.999999... deg
+--				Input width can be changed, but LUT will need recalculating
+--				Output width can be changed as desired. Max width = 32
+--				Outputs are signed and in 2s complement form.
+--				Setting the output width also sets the number of cordic iterations
+--				Gain of the module is set externally. 
+--				The cordic implementation has an inherent gain of approx. 1.646760258
+--				E.g. for a full scale 12 bit output the gain should be set to:
+--				[((2^11) - 1)/1.646760258] = 0x4DB
+---------------------------------------------------------------------------
 
 library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.numeric_std.all;
  
@@ -90,7 +101,7 @@ quadrant <= angle_in(input_size_g - 1 downto input_size_g - 2);
 gain <= ('1' & gain_in) when gain_in(output_size_g - 1) = '1' 
 	else ('0' & gain_in);
 
---This cordic implemntation only works between -90 and +90
+--This cordic implementation only works between -90 and +90
 --This process rotates the input by +/- 90 degrees so that -90 >= Z(0) <= +90
 angle_input : process(quadrant, gain, angle_in)
 begin
@@ -128,7 +139,8 @@ pipelined_cordic : process(clk, rst)
 begin
 
 		if (rst = '1') then
-		
+			
+			--Clear the whole pipeline on reset
 			for gen_var in 0 to (output_size_g - 1) loop
 				X(gen_var ) <= (others => '0');
 				Y(gen_var) <= (others => '0');
