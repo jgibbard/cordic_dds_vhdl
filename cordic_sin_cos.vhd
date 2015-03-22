@@ -16,7 +16,8 @@ library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.numeric_std.all;
 entity cordic_sin_cos is
 
 generic (
-	input_size_g	: integer := 32;  --Must be 32
+	
+	input_size_g	: integer := 32;  --Input size must match LUT size.
 	output_size_g	: integer := 16
 );
 
@@ -60,20 +61,25 @@ constant cordic_lut_c : LUT_t := (
 signal quadrant	: std_logic_vector(1 downto 0);
 signal gain			: std_logic_vector(output_size_g downto 0);
 
+--Stores initial values for x, y, and z
+signal initial_x	: signed(output_size_g downto 0);
+signal initial_y	: signed(output_size_g downto 0);
+signal initial_z	: signed(input_size_g - 1 downto 0);
+
 --Stores x and y values for each pipeline stage of the cordic algorithm 
 --X and Y must be one bit wider than the output size due to adder carry bits
 type pipeline_array_t is array (0 to output_size_g - 1) 
 							of signed(output_size_g downto 0);
 
-signal X : pipeline_array_t;
-signal Y : pipeline_array_t;
+signal X : pipeline_array_t := (others => (others =>'0'));
+signal Y : pipeline_array_t := (others => (others =>'0'));
 
 --Stores z values for each pipeline stage of the cordic algorithm.
 --Z must be as wide as the input angle
 type pipeline_array_z_t is array (0 to output_size_g - 1) 
 							of signed(input_size_g - 1 downto 0);
 
-signal Z : pipeline_array_z_t;
+signal Z : pipeline_array_z_t := (others => (others =>'0'));
 
 begin
 
@@ -86,70 +92,69 @@ gain <= ('1' & gain_in) when gain_in(output_size_g - 1) = '1'
 
 --This cordic implemntation only works between -90 and +90
 --This process rotates the input by +/- 90 degrees so that -90 >= Z(0) <= +90
-angle_input : process(clk,rst)
+angle_input : process(quadrant, gain, angle_in)
 begin
 
-	if (rst = '1') then
-		
-		X(0) <= (others => '0');
-		Y(0) <= (others => '0');
-		Z(0) <= (others => '0');
-		
-	elsif rising_edge(clk) then
-	
 		case quadrant is
 		
 			when "00" =>
-				X(0) <= signed(gain);
-				Y(0) <= (others => '0');
-				Z(0) <= signed(angle_in);
+				initial_x <= signed(gain);
+				initial_y <= (others => '0');
+				initial_z <= signed(angle_in);
 			when "01" =>
-				X(0) <= (others => '0');
-				Y(0) <= signed(gain);
-				Z(0) <= signed(("00" & angle_in(input_size_g-3 downto 0))); 
+				initial_x <= (others => '0');
+				initial_y <= signed(gain);
+				initial_z <= signed(("00" & angle_in(input_size_g-3 downto 0))); 
 			when "10" =>
-				X(0) <= (others => '0');
-				Y(0) <= -(signed(gain));
-				Z(0) <= signed(("11" & angle_in(input_size_g-3 downto 0)));
+				initial_x <= (others => '0');
+				initial_y <= -(signed(gain));
+				initial_z <= signed(("11" & angle_in(input_size_g-3 downto 0)));
 			when "11" =>
-				X(0) <= signed(gain);
-				Y(0) <= (others => '0');
-				Z(0) <= signed(angle_in);
+				initial_x <= signed(gain);
+				initial_y <= (others => '0');
+				initial_z <= signed(angle_in);
+			when others =>
+				initial_x <= (others => '0');
+				initial_y <= (others => '0');
+				initial_z <= (others => '0');
 				
 		end case;
 
-	end if;
-
-end process angle_input;
+end process angle_input;	
 
 --This process generates the pipelined stages of the cordic algorithm
 --See the Microchip Application note AN1061 for more details on cordic functions.
 pipelined_cordic : process(clk, rst)
 begin
 
-	generate_pipeline : for gen_var in 0 to output_size_g - 2 loop
-		
 		if (rst = '1') then
 		
-			X(gen_var + 1) <= (others => '0');
-			Y(gen_var + 1) <= (others => '0');
-			Z(gen_var + 1) <= (others => '0');
+			for gen_var in 0 to (output_size_g - 1) loop
+				X(gen_var ) <= (others => '0');
+				Y(gen_var) <= (others => '0');
+				Z(gen_var) <= (others => '0');
+			end loop;
 			
 		elsif rising_edge(clk) then
 		
-			if (Z(gen_var) < 0) then
-				X(gen_var + 1) <= X(gen_var) + shift_right(Y(gen_var), gen_var);
-				Y(gen_var + 1) <= Y(gen_var) - shift_right(X(gen_var), gen_var);
-				Z(gen_var + 1) <= Z(gen_var) + cordic_lut_c(gen_var);
-			else
-				X(gen_var + 1) <= X(gen_var) - shift_right(Y(gen_var), gen_var);
-				Y(gen_var + 1) <= Y(gen_var) + shift_right(X(gen_var), gen_var);
-				Z(gen_var + 1) <= Z(gen_var) - cordic_lut_c(gen_var);
-			end if;
+			--Register initial values
+			X(0) <= initial_x;
+			Y(0) <= initial_y;
+			Z(0) <= initial_z;
+				
+			generate_pipeline : for gen_var in 0 to output_size_g - 2 loop
+				if (Z(gen_var) < 0) then
+					X(gen_var + 1) <= X(gen_var) + (shift_right((Y(gen_var)), gen_var));
+					Y(gen_var + 1) <= Y(gen_var) - (shift_right((X(gen_var)), gen_var));
+					Z(gen_var + 1) <= Z(gen_var) + cordic_lut_c(gen_var);
+				else
+					X(gen_var + 1) <= X(gen_var) - (shift_right((Y(gen_var)), gen_var));
+					Y(gen_var + 1) <= Y(gen_var) + (shift_right((X(gen_var)), gen_var));
+					Z(gen_var + 1) <= Z(gen_var) - cordic_lut_c(gen_var);
+				end if;
+			end loop generate_pipeline;
 			
 		end if;
-
-	end loop generate_pipeline;
 	
 end process pipelined_cordic;
 

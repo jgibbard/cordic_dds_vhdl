@@ -47,6 +47,18 @@ port map (
 );
 
 
+angle_gen : process(clk, rst)
+begin
+	if rst = '1' then
+		angle <= (others => '0');
+		gain <= (others => '0');
+	elsif rising_edge(clk) then
+		gain <= X"04DB";
+		angle <= std_logic_vector(unsigned(angle) + 100000);
+	end if;
+
+end process angle_gen;
+
 
 
 
