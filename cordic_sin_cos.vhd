@@ -122,12 +122,40 @@ begin
 
 end process angle_input;
 
+--This process generates the pipelined stages of the cordic algorithm
+--See the Microchip Application note AN1061 for more details on cordic functions.
 pipelined_cordic : process(clk, rst)
 begin
 
+	generate_pipeline : for gen_var in 0 to output_size_g - 2 loop
+		
+		if (rst = '1') then
+		
+			X(gen_var + 1) <= (others => '0');
+			Y(gen_var + 1) <= (others => '0');
+			Z(gen_var + 1) <= (others => '0');
+			
+		elsif rising_edge(clk) then
+		
+			if (Z(gen_var) < 0) then
+				X(gen_var + 1) <= X(gen_var) + shift_right(Y(gen_var), gen_var);
+				Y(gen_var + 1) <= Y(gen_var) - shift_right(X(gen_var), gen_var);
+				Z(gen_var + 1) <= Z(gen_var) + cordic_lut_c(gen_var);
+			else
+				X(gen_var + 1) <= X(gen_var) - shift_right(Y(gen_var), gen_var);
+				Y(gen_var + 1) <= Y(gen_var) + shift_right(X(gen_var), gen_var);
+				Z(gen_var + 1) <= Z(gen_var) - cordic_lut_c(gen_var);
+			end if;
+			
+		end if;
 
+	end loop generate_pipeline;
+	
 end process pipelined_cordic;
 
-
+--Assign output. 
+--LSBit is discarded to obtain the desired output width
+sine_out		<= std_logic_vector(Y(output_size_g - 1)(output_size_g downto 1));
+cosine_out	<= std_logic_vector(X(output_size_g - 1 )(output_size_g downto 1));
 
 end behavioral;
