@@ -13,13 +13,22 @@
 -- Usage :	Input is 32 bits. i.e. 0 to (2^32 - 1) where:
 --				0 = 0 deg and (2^32 - 1) = 659.999999... deg
 --				Input width can be changed, but LUT will need recalculating
+--
 --				Output width can be changed as desired. Max width = 32
 --				Outputs are signed and in 2s complement form.
 --				Setting the output width also sets the number of cordic iterations
+--
 --				Gain of the module is set externally. 
---				The cordic implementation has an inherent gain of approx. 1.646760258
---				E.g. for a full scale 12 bit output the gain should be set to:
---				[((2^11) - 1)/1.646760258] = 0x4DB
+--				The cordic implementation has an inherent gain of approx. 1.646760258 
+--				Gain setting for 12bit full scale [((2^11) - 1)/1.646760258] = 0x4D8
+--				Gain setting for 16bit full scale [((2^15) - 1)/1.646760258] = 0x4DB7
+--				Gain setting for 32bit full scale [((2^32) - 1)/1.646760258] = 0x4DBA76D0
+--				The gain value may need to have 4 or 5 subtracted from it.
+--				This is to account for rounding errors which could lead to overflows.
+--				Setting the gain higher than full scale range will cause overflows.
+--
+--				The operation of module is pipelined. (One sample out for each one in)
+--				There is a delay of output_size_g clk cycles from input to output.
 ---------------------------------------------------------------------------
 
 library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.numeric_std.all;
@@ -170,9 +179,10 @@ begin
 	
 end process pipelined_cordic;
 
---Assign output. 
---LSBit is discarded to obtain the desired output width
-sine_out		<= std_logic_vector(Y(output_size_g - 1)(output_size_g downto 1));
-cosine_out	<= std_logic_vector(X(output_size_g - 1 )(output_size_g downto 1));
+--Assign output
+--As long as gain is set to ensure full scale range of output width (or less) then
+--MSBit can be discarded to obtain the desired output width
+sine_out		<= std_logic_vector(Y(output_size_g - 1)(output_size_g - 1 downto 0));
+cosine_out	<= std_logic_vector(X(output_size_g - 1 )(output_size_g - 1 downto 0));
 
 end behavioral;

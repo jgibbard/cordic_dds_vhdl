@@ -53,8 +53,8 @@ begin
 		angle <= (others => '0');
 		gain <= (others => '0');
 	elsif rising_edge(clk) then
-		gain <= X"04DB";
-		angle <= std_logic_vector(unsigned(angle) + 100000);
+		gain <= X"04D7";
+		angle <= std_logic_vector(unsigned(angle) + 10000000);
 	end if;
 
 end process angle_gen;
